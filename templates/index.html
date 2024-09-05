@@ -46,101 +46,116 @@
     </style>
 </head>
 <body>
-    <div class="d-flex">
-        <!-- Sidebar -->
-        <nav class="col-md-2 d-none d-md-block sidebar">
-            <div class="sidebar-sticky">
-                <h5 class="sidebar-heading">Подключенные серверы</h5>
-                <ul class="nav flex-column">
-                    {% for server in servers %}
-                    <li class="nav-item d-flex justify-content-between align-items-center">
-                        <a class="nav-link" href="/execute/?server_id={{ server.id }}" style="font-weight: bold; font-size: 1.1rem;">
-                            <i class="fas fa-server"></i>  {{ server.name }}
-                        </a>
-                        <form action="/delete_server/" method="post" class="ml-2">
-                            <input type="hidden" name="server_id" value="{{ server.id }}">
-                            <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
-                        </form>
-                    </li>
-                    {% endfor %}
-                </ul>
-                <button type="button" class="btn btn-success" data-toggle="modal" data-target="#addServerModal">
-                    Добавить сервер
-                </button>
-            </div>
-        </nav>
+<div class="d-flex">
+    <!-- Sidebar -->
+    <nav class="col-md-2 d-none d-md-block sidebar">
+        <div class="sidebar-sticky">
+            <h5 class="sidebar-heading">Подключенные серверы</h5>
+            <ul class="nav flex-column">
+                {% for server in servers %}
+                <li class="nav-item d-flex justify-content-between align-items-center">
+                    <a class="nav-link" href="/execute/?server_id={{ server.id }}"
+                       style="font-weight: bold; font-size: 1.1rem;">
+                        <i class="fas fa-server"></i> {{ server.name }}
+                    </a>
+                    <form action="/delete_server/" method="post" class="ml-2">
+                        <input type="hidden" name="server_id" value="{{ server.id }}">
+                        <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            <button type="button" class="btn btn-success" data-toggle="modal" data-target="#addServerModal">
+                Добавить сервер
+            </button>
+        </div>
+    </nav>
 
-        <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-4">
-            <div class="container mt-5">
-                <h1 class="text-center mb-4">Выполнение команды на сервере</h1>
+    <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-4">
+        <div class="container mt-5">
+            <h1 class="text-center mb-4">Выполнение команды на сервере</h1>
 
-                <!-- Форма для выполнения команды -->
-                <h2>Выполнить команду на сервере</h2>
-                {% if current_server %}
-                <form action="/execute/" method="post" class="form-inline justify-content-center mb-4">
-                    <input type="hidden" name="server_id" value="{{ current_server.id }}">
-                    <div class="input-group">
-                        <input type="text" name="command" class="form-control" required placeholder="Введите команду">
-                        <div class="input-group-append">
-                            <button type="submit" class="btn btn-primary">Выполнить</button>
-                        </div>
+            <!-- Форма для выполнения команды -->
+            <h2>Выполнить команду на сервере</h2>
+            {% if current_server %}
+            <form action="/execute/" method="post" class="form-inline justify-content-center mb-4">
+                <input type="hidden" name="server_id" value="{{ current_server.id }}">
+                <div class="input-group mb-2">
+                    <input type="text" name="command" class="form-control" placeholder="Введите команду">
+                    <div class="input-group-append">
+                        <button type="submit" class="btn btn-primary">Выполнить</button>
                     </div>
-                </form>
-
-                <h2>Предыдущие команды:</h2>
-                <div class="list-group">
-                    {% for item in current_server.commands_results %}
-                        <div class="list-group-item">
-                            <h5 class="mb-1"><strong>Команда:</strong> {{ item.command }}</h5>
-                            <p class="mb-1"><strong>Результат:</strong></p>
-                            <pre class="bg-light p-2">{{ item.result }}</pre>
-                        </div>
-                    {% endfor %}
                 </div>
-                {% else %}
-                <p class="text-center">Пожалуйста, выберите сервер для выполнения команды.</p>
-                {% endif %}
-            </div>
-        </main>
-    </div>
-
-    <!-- Modal for adding a server -->
-    <div class="modal fade" id="addServerModal" tabindex="-1" aria-labelledby="addServerModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addServerModalLabel">Добавить сервер</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span>&times;</span>
+                <br>
+                <div class="btn-group" role="group" aria-label="Basic example", style="margin: auto">
+                    <button type="submit" name="command" value="sudo systemctl start myservice" class="btn btn-success">
+                        Включить
+                    </button>
+                    <button type="submit" name="command" value="sudo poweroff" class="btn btn-danger">Выключить</button>
+                    <button type="submit" name="command" value="sudo reboot" class="btn btn-warning">Перезагрузить
                     </button>
                 </div>
-                <div class="modal-body">
-                    <form action="/add_server/" method="post">
-                        <div class="form-group">
-                            <label for="name">Имя сервера:</label>
-                            <input type="text" id="name" name="name" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="ip">IP адрес:</label>
-                            <input type="text" id="ip" name="ip" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="login">Логин:</label>
-                            <input type="text" id="login" name="login" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Пароль:</label>
-                            <input type="password" id="password" name="password" class="form-control" required>
-                        </div>
-                        <button type="submit" class="btn btn-success">Добавить сервер</button>
-                    </form>
+            </form>
+
+
+            <h2>Предыдущие команды:</h2>
+            <form action="/clear-history/?server_id={{ current_server.id }}" method="post" style="display: inline;">
+                <button type="submit" class="btn btn-danger mb-3">Очистить историю команд</button>
+            </form>
+            <div class="list-group">
+                {% for item in current_server.commands_results|reverse %}
+                <div class="list-group-item">
+                    <h5 class="mb-1"><strong>Команда:</strong> {{ item.command }}</h5>
+                    <p class="mb-1"><strong>Время выполнения:</strong> {{ item.timestamp }}</p>
+                    <p class="mb-1"><strong>Результат:</strong></p>
+                    <pre class="bg-light p-2">{{ item.result }}</pre>
                 </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-center">Пожалуйста, выберите сервер для выполнения команды.</p>
+            {% endif %}
+        </div>
+    </main>
+</div>
+
+<!-- Modal for adding a server -->
+<div class="modal fade" id="addServerModal" tabindex="-1" aria-labelledby="addServerModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addServerModalLabel">Добавить сервер</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form action="/add_server/" method="post">
+                    <div class="form-group">
+                        <label for="name">Имя сервера:</label>
+                        <input type="text" id="name" name="name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ip">IP адрес:</label>
+                        <input type="text" id="ip" name="ip" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login">Логин:</label>
+                        <input type="text" id="login" name="login" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Пароль:</label>
+                        <input type="password" id="password" name="password" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">Добавить сервер</button>
+                </form>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 </html>

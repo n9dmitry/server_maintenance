@@ -5,8 +5,11 @@ from sqlalchemy.orm import Session
 import paramiko
 from starlette.middleware.cors import CORSMiddleware
 import json
-from models import SessionLocal, Server, User, engine
+from models import SessionLocal, Server, User, CommandResult, engine
 import models
+from datetime import datetime
+import logging
+
 
 app = FastAPI()
 
@@ -18,8 +21,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-templates = Jinja2Templates(directory="templates")
+logging.basicConfig(level=logging.INFO)
 
+
+templates = Jinja2Templates(directory="templates")
 
 def get_db():
     db = SessionLocal()
@@ -27,7 +32,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
 
 def execute_command(ip: str, username: str, password: str, command: str):
     try:
@@ -44,13 +48,11 @@ def execute_command(ip: str, username: str, password: str, command: str):
     except Exception as e:
         return str(e)
 
-
 def authenticate_user(db: Session, username: str, password: str):
     user = db.query(User).filter(User.username == username).first()
     if user and user.password == password:
         return user
     return None
-
 
 @app.post("/login/")
 async def login(
@@ -67,25 +69,20 @@ async def login(
     response.set_cookie(key="username", value=username)
     return response
 
-
 @app.get("/login_page", response_class=HTMLResponse)
 async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
-
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, db: Session = Depends(get_db)):
     username = request.cookies.get("username")
 
     if not username:
-        # If not authenticated, redirect to login
         return RedirectResponse(url="/login_page")
 
     servers = db.query(Server).all()
-    commands_results = json.loads(request.cookies.get("session", "[]"))
     return templates.TemplateResponse("index.html",
-                                      {"request": request, "commands_results": commands_results, "servers": servers})
-
+                                      {"request": request, "servers": servers})
 
 @app.post("/add_server/")
 async def add_server(
@@ -99,8 +96,7 @@ async def add_server(
     new_server = Server(name=name, ip=ip, login=login, password=password)
     db.add(new_server)
     db.commit()
-    return {"message": "Server added successfully!"}
-
+    return RedirectResponse(url="/", status_code=303)  # редирект на главную страницу
 
 @app.post("/delete_server/")
 async def delete_server(
@@ -114,7 +110,6 @@ async def delete_server(
         return {"message": "Server deleted successfully!"}
     return {"error": "Server not found"}
 
-
 @app.get("/execute/", response_class=HTMLResponse)
 async def show_execute_command_page(request: Request, server_id: int, db: Session = Depends(get_db)):
     server = db.query(Server).filter(Server.id == server_id).first()
@@ -122,42 +117,56 @@ async def show_execute_command_page(request: Request, server_id: int, db: Sessio
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
 
-    commands_results = json.loads(request.cookies.get("session", "[]"))
-    return templates.TemplateResponse("index.html", {
+    commands_results = db.query(CommandResult).filter(CommandResult.server_id == server_id).all()
+    return templates.TemplateResponse("index.html"  , {
         "request": request,
         "commands_results": commands_results,
         "servers": db.query(Server).all(),
-        "current_server": server  # Pass the current server to the template
+        "current_server": server
     })
 
 
+@app.post("/clear-history/")
+async def clear_history(server_id: int, db: Session = Depends(get_db)):
+    logging.info(f"Получен запрос на очистку истории для server_id: {server_id}")
+
+    results = db.query(CommandResult).filter(CommandResult.server_id == server_id).all()
+
+    if not results:
+        logging.warning(f"Нет результатов команд для server_id: {server_id}")
+        raise HTTPException(status_code=404, detail="Нет результатов команд для удаления.")
+
+    deleted_count = db.query(CommandResult).filter(CommandResult.server_id == server_id).delete()
+    db.commit()
+
+    if deleted_count == 0:
+        logging.error(f"Не удалось удалить записи для server_id: {server_id}")
+        raise HTTPException(status_code=404, detail="Не удалось удалить записи.")
+
+    logging.info(f"Успешно очищена история для server_id: {server_id}, удалено записей: {deleted_count}")
+    return {"message": "История очищена!", "deleted_count": deleted_count}
+
+
 @app.post("/execute/")
-async def execute(request: Request, command: str = Form(...), server_id: int = Form(...), session: str = Cookie(None),
-                  db: Session = Depends(get_db)):
+async def execute(request: Request, command: str = Form(...), server_id: int = Form(...), db: Session = Depends(get_db)):
     server = db.query(Server).filter(Server.id == server_id).first()
 
     if not server:
         return {"error": "Server not found"}
 
     result = execute_command(server.ip, server.login, server.password, command)
-    commands_results = json.loads(session) if session else []
 
-    commands_results.append({"command": command, "result": result})
+    # Сохранение результата в БД
+    command_result = CommandResult(command=command, result=result, timestamp=datetime.utcnow(), server_id=server_id)
+    db.add(command_result)
+    db.commit()
 
-    response = templates.TemplateResponse("index.html", {"request": request, "commands_results": commands_results,
-                                                         "servers": db.query(Server).all()})
-
-    response.set_cookie(key="session", value=json.dumps(commands_results), httponly=True)
-
-    return response
-
+    return RedirectResponse(url=f"/execute/?server_id={server.id}", status_code=303)
 
 if __name__ == "__main__":
     import uvicorn
-
-
     models.Base.metadata.create_all(bind=engine)
-    # Ensure there is at least one user for login
+
     with SessionLocal() as db:
         if not db.query(User).filter(User.username == "admin").first():
             db.add(User(username="admin", password="admin"))

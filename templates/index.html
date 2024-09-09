@@ -76,6 +76,22 @@
             <h1 class="text-center mb-4">Выполнение команды на сервере</h1>
 
             <!-- Форма для выполнения команды -->
+
+            <div>
+                <h2>Информация о системе</h2>
+                <p><strong>Название сервера:</strong> {{ name }}</p>
+                <p><strong>Операционная система:</strong> {{ operation_system }}</p>
+                <p><strong>Объем памяти RAM:</strong> {{ ram }} ГБ</p>
+                <p><strong>Объем диска:</strong> {{ disk }} ГБ SSD</p>
+                <p><strong>Статус:</strong> {{ status }}</p>
+                <p><strong>Локация:</strong> {{ region_slug }}</p>
+            </div>
+            <div>
+                <h2>Баланс</h2>
+                <p><strong>Цена за час:</strong> {{ hourly_cost }} Р</p>
+                <p><strong>Цена в месяц:</strong> {{ monthly_cost }} Р</p>
+                <p><strong>Общий баланс:</strong> {{ total_balance }} Р</p>
+            </div>
             <h2>Выполнить команду на сервере</h2>
             {% if current_server %}
             <form action="/execute/" method="post" class="form-inline justify-content-center mb-4">
@@ -91,13 +107,11 @@
                     <button type="submit" name="command" value="sudo systemctl start myservice" class="btn btn-success">
                         Включить
                     </button>
-                    <button type="submit" name="command" value="sudo poweroff" class="btn btn-danger">Выключить</button>
+<!--                    <button type="submit" name="command" value="sudo poweroff" class="btn btn-danger">Выключить</button>-->
                     <button type="submit" name="command" value="sudo reboot" class="btn btn-warning">Перезагрузить
                     </button>
                 </div>
             </form>
-
-
             <h2>Предыдущие команды:</h2>
             <form action="/clear-history/?server_id={{ current_server.id }}" method="post" style="display: inline;">
                 <button type="submit" class="btn btn-danger mb-3">Очистить историю команд</button>

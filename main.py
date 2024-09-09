@@ -9,6 +9,8 @@ from models import SessionLocal, Server, User, CommandResult, engine
 import models
 from datetime import datetime
 import logging
+import httpx
+from typing import Optional
 
 
 app = FastAPI()
@@ -25,6 +27,66 @@ logging.basicConfig(level=logging.INFO)
 
 
 templates = Jinja2Templates(directory="templates")
+
+TOKEN = "7777e84f3f9902abb6f2fd3d88427533810cf525489ed1b187a087395383c6891eb87abdedfbfaf3e2b31b4a5f80818d"
+
+
+# @app.get("/get_data", response_class=HTMLResponse)
+# async def get_data(request: Request, server_id: Optional[int] = None):
+#     reglets_url = 'https://api.cloudvps.reg.ru/v1/reglets'
+#     balance_data_url = 'https://api.cloudvps.reg.ru/v1/balance_data'
+#
+#     # Заголовки для запроса
+#     headers = {
+#         'Authorization': f'Bearer {TOKEN}',
+#         'Content-Type': 'application/json'
+#     }
+#
+#     async with httpx.AsyncClient() as client:
+#         reglets_response = await client.get(reglets_url, headers=headers)
+#         balance_response = await client.get(balance_data_url, headers=headers)
+#
+#     # Получение данных о балансе
+#     balance_data = balance_response.json().get("balance_data", {})
+#     total_balance = balance_data.get("balance", 0)
+#     hourly_cost = balance_data.get("hourly_cost", 0)
+#     monthly_cost = balance_data.get("monthly_cost", 0)
+#
+#     # Получение данных о реглетах
+#     reglets_data = reglets_response.json().get("reglets", [])
+#
+#     # Определяем нужный реглет
+#     if server_id is not None and server_id > 0:
+#         selected_reglet = next((reglet for reglet in reglets_data if reglet['id'] == server_id), None)
+#     else:
+#         selected_reglet = reglets_data[0] if reglets_data else None
+#
+#
+#
+#     # Извлечение информации о реглете
+#     name = selected_reglet.get("name")
+#     ram = selected_reglet.get("memory")
+#     disk = selected_reglet.get("disk")
+#     status = selected_reglet.get("status")
+#     region_slug = selected_reglet.get("region_slug")
+#     operation_system = selected_reglet.get('image', {}).get('name')
+#
+#
+#     # Возврат собранной информации
+#     return templates.TemplateResponse("index.html", {
+#         "request": request,
+#         "operation_system": operation_system,
+#         "ram": ram,
+#         "disk": disk,
+#         "status": status,
+#         "region_slug": region_slug,
+#         "name": name,
+#         "hourly_cost": hourly_cost,
+#         "monthly_cost": monthly_cost,
+#         "total_balance": total_balance,
+#     })
+
+
 
 def get_db():
     db = SessionLocal()
@@ -110,21 +172,86 @@ async def delete_server(
         return {"message": "Server deleted successfully!"}
     return {"error": "Server not found"}
 
+
 @app.get("/execute/", response_class=HTMLResponse)
-async def show_execute_command_page(request: Request, server_id: int, db: Session = Depends(get_db)):
+async def execute_command_page(request: Request, server_id: int, db: Session = Depends(get_db)):
+    # Получаем информацию о сервере из базы
     server = db.query(Server).filter(Server.id == server_id).first()
 
     if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
+        raise HTTPException(status_code=404, detail="Сервер не найден")
+
+    reglets_url = 'https://api.cloudvps.reg.ru/v1/reglets'
+    balance_data_url = 'https://api.cloudvps.reg.ru/v1/balance_data'
+
+    headers = {
+        'Authorization': f'Bearer {TOKEN}',
+        'Content-Type': 'application/json'
+    }
+
+    async with httpx.AsyncClient() as client:
+        reglets_response = await client.get(reglets_url, headers=headers)
+        balance_response = await client.get(balance_data_url, headers=headers)
+
+    if reglets_response.status_code != 200:
+        raise HTTPException(status_code=reglets_response.status_code, detail="Ошибка при получении реглетов")
+
+    if balance_response.status_code != 200:
+        raise HTTPException(status_code=balance_response.status_code, detail="Ошибка при получении данных о балансе")
+
+    balance_data = balance_response.json().get("balance_data", {})
+    total_balance = balance_data.get("balance", 0)
+
+    # Извлекаем детализацию
+    detalization = balance_data.get("detalization", [])
+
+    # Реглеты
+    reglets_data = reglets_response.json().get("reglets", [])
+    print("Все реглеты:", reglets_data)  # Отладочный вывод
+
+    # Обрабатываем индекс для поиска реглета
+    index = server_id - 1  # server_id передается в качестве индекса (начиная с 1)
+
+    # Проверяем, существует ли реглет по индексу
+    if 0 <= index < len(reglets_data):
+        selected_reglet = reglets_data[index]
+        name = selected_reglet.get("name")
+        ram = selected_reglet.get("memory")
+        disk = selected_reglet.get("disk")
+        status = selected_reglet.get("status")
+        region_slug = selected_reglet.get("region_slug")
+        operation_system = selected_reglet.get('image', {}).get('name')
+
+        # Ищем информацию о стоимости конкретного реглета
+        for item in detalization:
+            if item.get('name') == name:  # Или можно использовать другой уникальный идентификатор
+                hourly_cost = float(item.get("price", 0))
+                monthly_cost = float(item.get("price_month", 0))
+                break
+        else:
+            hourly_cost = 0
+            monthly_cost = 0
+    else:
+        name = ram = disk = status = region_slug = operation_system = "Не найдено"
+        hourly_cost = monthly_cost = 0  # По умолчанию, если реглет не найден
 
     commands_results = db.query(CommandResult).filter(CommandResult.server_id == server_id).all()
-    return templates.TemplateResponse("index.html"  , {
+
+    return templates.TemplateResponse("index.html", {
         "request": request,
         "commands_results": commands_results,
         "servers": db.query(Server).all(),
-        "current_server": server
+        "current_server": server,
+        "operation_system": operation_system,
+        "ram": ram,
+        "disk": disk,
+        "status": status,
+        "region_slug": region_slug,
+        "name": name,
+        "hourly_cost": hourly_cost,
+        "monthly_cost": monthly_cost,
+        "total_balance": total_balance,
     })
-
 
 @app.post("/clear-history/")
 async def clear_history(server_id: int, db: Session = Depends(get_db)):
